@@ -4,6 +4,7 @@
 #include <ctype.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <math.h>
 #include "pico/stdlib.h"
 #include "xl2515.h"
 
@@ -38,13 +39,13 @@
 //PIDを計算して、制御する時間。
 #define CONTROL_PERIOD_MS 1
 // PIDのゲイン
-#define PID_KP 0.4f
+#define PID_KP 0.65f
 #define PID_KI 0.035f
 #define PID_KD 0.015f
 // USBのシリアル経由でながす時間の制限。
 // これをつけている理由は、PC側でコンソールに値を表示すると、
 //キーボード入力が効かない時があるから。
-#define USB_FB_PERIOD_DEFAULT_MS 50
+#define USB_FB_PERIOD_DEFAULT_MS 100
 #define USB_FB_PERIOD_NONE -1
 // LEDチカチカの周期。CANを受け取ったら光るようにしてある。
 #define LED_IDLE_OFF_MS 20
@@ -123,11 +124,14 @@ static int32_t g_usb_fb_period_ms = USB_FB_PERIOD_DEFAULT_MS;
 static uint64_t g_last_usb_fb_ms = 0;
 
 static latest_feedback_t g_latest_feedback[3];
+static feedback_t g_latest_motor_feedback[3];
+static bool g_has_motor_feedback[3];
 static int8_t g_pending_mode[3];
 static int32_t g_pid_targets[3];
 static bool g_pid_enabled = false;
 static pid_controller_t g_pid_motor1;
 static pid_controller_t g_pid_motor2;
+static odometry_t g_odometry;
 
 static bool g_led_state = false;
 static uint64_t g_last_comm_ms = 0;
@@ -678,17 +682,24 @@ int main(void)
         uint8_t data[8];
         uint8_t len = 0;
         while (xl2515_recv(&can_id, data, &len)) {
-            note_comm();
+            note_communication();
             feedback_t fb;
             if (parse_can_feedback_message(can_id, data, len, &fb)) {
                 g_latest_feedback[fb.motor_id].velocity = fb.velocity;
                 g_latest_feedback[fb.motor_id].mode = fb.mode;
+                g_latest_motor_feedback[fb.motor_id] = fb;
+                g_has_motor_feedback[fb.motor_id] = true;
+                if (g_has_motor_feedback[MOTOR1_ID] && g_has_motor_feedback[MOTOR2_ID]) {
+                    calc_robot_odometry(&g_latest_motor_feedback[MOTOR1_ID],
+                                        &g_latest_motor_feedback[MOTOR2_ID],
+                                        &g_odometry);
+                }
                 if (g_pending_mode[fb.motor_id] == (int8_t)fb.mode) {
                     g_pending_mode[fb.motor_id] = -1;
                 }
                 uint64_t fb_ms = now_ms();
                 if (usb_feedback_due(fb_ms)) {
-                    send_usb_feedback(&fb);
+                    send_usb_feedback(&fb, &g_odometry);
                 }
             }
         }
