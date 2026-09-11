@@ -655,7 +655,7 @@ int main(void)
     while (true) {
         uint64_t current_ms = now_ms();
 
-        int ch = getchar_timeout_us(0);
+        int ch = getchar_timeout_us(0); // ノンブロッキングで文字取得
         while (ch != PICO_ERROR_TIMEOUT) {
             if (ch == '\r') {
                 /* ignore */

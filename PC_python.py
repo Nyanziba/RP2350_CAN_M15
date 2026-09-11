@@ -171,6 +171,7 @@ def list_serial_ports():
 def serial_reader(ser: serial.Serial, stop_event: threading.Event):
     # デバイス→PC（フィードバックJSON行）を垂れ流し表示
     ser.timeout = 0.1
+    x = 0
     while not stop_event.is_set():
         try:
             line = ser.readline()
@@ -182,6 +183,9 @@ def serial_reader(ser: serial.Serial, stop_event: threading.Event):
 
             # フィードバックJSONを読めたら整形表示
             try:
+                x+=1
+                if x%3 !=0:
+                    continue
                 fb = json.loads(s)
                 motor_id = fb.get("motor_id")
                 angle = fb.get("angle")
@@ -218,7 +222,7 @@ def main():
     ap.add_argument("--port", help="例: COM5, /dev/ttyACM0")
     ap.add_argument("--baud", type=int, default=115200)
     ap.add_argument("--tick-hz", type=float, default=5.0)
-    ap.add_argument("--step-rpm", type=float, default=10.0)
+    ap.add_argument("--step-rpm", type=float, default=5.0)
     ap.add_argument("--max-rpm", type=float, default=200.0)
     ap.add_argument("--deadman-s", type=float, default=100.0)
     ap.add_argument("--keepalive-hz", type=float, default=10.0)
